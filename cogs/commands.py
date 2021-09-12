@@ -116,6 +116,8 @@ class Commands(commands.Cog):
 
         **Valid Roles:**
         notify (`!join notify`), He/Him/His (`!join he`), She/Her/Hers (`!join she`), They/Them/Theirs (`!join they`), Ze/Zir/Zirs (`!join ze`)
+        L1A, L1B, L1C, L1D, L1E, L1F, L1G
+        Looking for Partners (`!join lfp`)
         """
 
         # case where role name is space separated
@@ -126,8 +128,8 @@ class Commands(commands.Cog):
             raise BadArgs("", show_help=True)
 
         # make sure that you can't add roles like "prof" or "ta"
-        valid_roles = ["L1A", "L1B", "L1C", "L1D", "L1E", "L1F", "L1G", "notify", "He/Him/His", "She/Her/Hers", "They/Them/Theirs", "Ze/Zir/Zirs"]
-        aliases = {"he": "He/Him/His", "she": "She/Her/Hers", "ze": "Ze/Zir/Zirs", "they": "They/Them/Theirs"}
+        valid_roles = ["Looking for Partners", "L1A", "L1B", "L1C", "L1D", "L1F", "L1G", "L1H", "L1K", "L1M", "L1N", "L1P", "L1R", "notify", "He/Him/His", "She/Her/Hers", "They/Them/Theirs", "Ze/Zir/Zirs"]
+        aliases = {"he": "He/Him/His", "she": "She/Her/Hers", "ze": "Ze/Zir/Zirs", "they": "They/Them/Theirs", "lfp": "Looking for Partners"}
 
         # Convert alias to proper name
         if name.lower() in aliases:

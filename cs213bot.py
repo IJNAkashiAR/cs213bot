@@ -25,7 +25,7 @@ CS213BOT_KEY = os.getenv("CS213BOT_KEY")
 bot = commands.Bot(command_prefix="!", help_command=None, intents=discord.Intents.all())
 bot.pl_dict = defaultdict(list)
 bot.due_tomorrow = []
-bot.pl = PrairieLearn(os.getenv("PLTOKEN"), api_server_url = "https://ca.prairielearn.org/pl/api/v1")
+bot.pl = PrairieLearn(os.getenv("PLTOKEN"), api_server_url = "https://ca.prairielearn.com/pl/api/v1")
 
 for extension in filter(lambda f: isfile(join("cogs", f)) and f != "__init__.py", os.listdir("cogs")):
     bot.load_extension(f"cogs.{extension[:-3]}")
@@ -156,7 +156,7 @@ async def crawl_prairielearn():
                         else:
                             title += f" (No Due Date)"
 
-                        embed = discord.Embed(color = int("%x%x%x" % colormap[entry["color"]], 16), title = title, description = f"[**{entry['label']} {entry['name']}**](https://ca.prairielearn.org/pl/course_instance/2316/assessment/{entry['id']}/)")
+                        embed = discord.Embed(color = int("%x%x%x" % colormap[entry["color"]], 16), title = title, description = f"[**{entry['label']} {entry['name']}**](https://ca.prairielearn.com/pl/course_instance/{os.getenv('COURSE_ID')}/assessment/{entry['id']}/)")
                         embed.set_footer(text = "CPSC 213 on PrairieLearn")
                         embed.set_thumbnail(url = "https://cdn.discordapp.com/attachments/511797229913243649/803491233925169152/unknown.png")
                         await channel.send(embed = embed)
@@ -166,29 +166,29 @@ async def crawl_prairielearn():
                             bot.due_tomorrow.append(entry["label"]+" "+entry["name"])
                             hourcount = round(((mode["end_unix"] + 60*mode["offset"]) - time.time())/3600, 2)
                             if hourcount < 0: continue
-                            embed = discord.Embed(color = int("%x%x%x" % colormap[entry["color"]], 16), title = f"{['Assignment', 'Quiz'][entry['label'].startswith('Q')]} {entry['label']} Due in < {hourcount} Hours\n({mode['end']})", description = f"[**{entry['label']} {entry['name']}**](https://ca.prairielearn.org/pl/course_instance/2316/assessment/{entry['id']}/)")
+                            embed = discord.Embed(color = int("%x%x%x" % colormap[entry["color"]], 16), title = f"{['Assignment', 'Quiz'][entry['label'].startswith('Q')]} {entry['label']} Due in < {hourcount} Hours\n({mode['end']})", description = f"[**{entry['label']} {entry['name']}**](https://ca.prairielearn.com/pl/course_instance/{os.getenv('COURSE_ID')}/assessment/{entry['id']}/)")
                             embed.set_footer(text = "CPSC 213 on PrairieLearn")
                             embed.set_thumbnail(url = "https://cdn.discordapp.com/attachments/511797229913243649/803491233925169152/unknown.png")
                             await channel.send(embed = embed)
                             sent = True
                             break
 
-            if sent:
-                await channel.send(f"<@&{os.getenv('NOTIF_ROLE')}>")
+            #if sent:
+                #await channel.send(f"<@&{os.getenv('NOTIF_ROLE')}>")
 
             bot.pl_dict = new_pl_dict
             writeJSON(dict(bot.pl_dict), "data/pl.json")
             writeJSON(bot.due_tomorrow, "data/tomorrow.json")
             thetime = datetime.utcfromtimestamp(time.time() - (7 * 60 * 60)).strftime('%Y-%m-%d %H:%M:%S')
             embed = discord.Embed(title = f"Current Assessments on CPSC 213 PrairieLearn", description = f"Updates every 30 minutes, last checked {thetime}", color = 0x8effc1)
-            thechannel = bot.get_channel(845733651446104134)
+            thechannel = bot.get_channel(884874356654735413)
             for assigntype in bot.pl_dict:
                 entrylist = bot.pl_dict[assigntype]
                 formattedentries = []
                 seenmodes = []
                 for entry in entrylist:
                     skip = False
-                    formatted = f"`{entry['label']}` **[{entry['name']}](https://ca.prairielearn.org/pl/course_instance/2316/assessment/{entry['id']}/)**\nCredit:\n"
+                    formatted = f"`{entry['label']}` **[{entry['name']}](https://ca.prairielearn.com/pl/course_instance/{os.getenv('COURSE_ID')}/assessment/{entry['id']}/)**\nCredit:\n"
                     for mode in entry["modes"]:
                         if mode['end'] and mode['credit'] == 100:
                             offset = int(mode["end"][-1])
@@ -205,14 +205,17 @@ async def crawl_prairielearn():
                     if skip: continue
 
                     formattedentries.append(formatted)
-                embed.add_field(name = f"\u200b\n***{assigntype.upper()}***", value = "\n".join(formattedentries), inline = False)
+                embed.add_field(name = f"\u200b\n***{assigntype.upper()}***", value = "\n".join(formattedentries) + '\u200b', inline = False)
             
             embed.set_thumbnail(url = "https://cdn.discordapp.com/attachments/511797229913243649/803491233925169152/unknown.png")
-            msg = await thechannel.fetch_message(845739504333488158)
+            msg = await thechannel.fetch_message(886048835183460384)
             await msg.edit(embed = embed)
             await asyncio.sleep(1800)
-        except Exception as e:
-            await channel.send(str(e))
+        except Exception as error:
+            await channel.send(str(error))
+            etype = type(error)
+            trace = error.__traceback__
+            print(("".join(traceback.format_exception(etype, error, trace, 999))).replace("home/rq2/.local/lib/python3.9/site-packages/", ""))
             await asyncio.sleep(60)
 
 
@@ -229,12 +232,12 @@ def get_pl_data(method, options):
         elif r.status_code == 502:
             retry_502_i += 1
             if retry_502_i >= retry_502_max:
-                raise Exception(f'Maximum number of retries reached on 502 Bad Gateway Error for {url}')
+                raise Exception(f'Maximum number of retries reached on 502 Bad Gateway Error')
             else:
                 time.sleep(10)
                 continue
         else:
-            raise Exception(f'Invalid status returned for {url}: {r.status_code}')
+            raise Exception(f'Invalid status returned: {r.status_code}')
 
     data = r.json()
     return data

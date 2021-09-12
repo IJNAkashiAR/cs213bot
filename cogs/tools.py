@@ -1,5 +1,6 @@
 import time
 import subprocess
+import os
 
 import discord
 from discord.ext import commands
@@ -39,7 +40,7 @@ class Tools(commands.Cog):
             seenmodes = []
             for entry in entrylist:
                 skip = False
-                formatted = f"`{entry['label']}` **[{entry['name']}](https://ca.prairielearn.org/pl/course_instance/2316/assessment/{entry['id']}/)**\nCredit:\n"
+                formatted = f"`{entry['label']}` **[{entry['name']}](https://ca.prairielearn.com/pl/course_instance/{os.getenv('COURSE_ID')}/assessment/{entry['id']}/)**\nCredit:\n"
                 for mode in entry["modes"]:
                     if mode['end'] and mode['credit'] == 100:
                         offset = int(mode["end"][-1])
@@ -70,13 +71,14 @@ class Tools(commands.Cog):
         **Usage:** !checkservers
         """
         # https://github.com/Person314159/cs221bot/blob/master/cogs/server_checker.py
-        msgs = []
-        for server_name in ["thetis", "remote", "annacis", "anvil", "bowen", "lulu", "gambier"]:
-            ip = f"{server_name}.students.cs.ubc.ca"
-            connect = can_connect(ip)
-            msgs.append(f"{['⚠️', '✅'][connect]} {server_name} is {['offline', 'online'][connect]}")
+        async with ctx.typing():
+            msgs = []
+            for server_name in ["thetis", "gambier", "pender", "valdes", "anvil", "annacis", "bowen", "lulu"]:
+                ip = f"{server_name}.students.cs.ubc.ca"
+                connect = can_connect(ip)
+                msgs.append(f"{['⚠️', '✅'][connect]} {server_name.replace('thetis', 'thetis (remote)')} is {['offline', 'online'][connect]}")
 
-        await ctx.send("\n".join(msgs))
+            await ctx.send("\n".join(msgs))
 
 
     @commands.command()

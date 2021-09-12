@@ -1,5 +1,6 @@
 discord.py==1.5.1
 googletrans==3.0.0
+matplotlib==3.4.2
 numpy==1.19.5
 python-dotenv==0.14.0
 pytz==2020.1
