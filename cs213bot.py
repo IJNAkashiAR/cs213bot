@@ -11,7 +11,7 @@ import sys
 from collections import defaultdict
 from datetime import datetime
 from os.path import isfile, join
-from helper import convert_pl_time_to_unix_time, convert_unix_time_to_readable
+from helper import convert_pl_time_to_unix_time, convert_unix_time_to_readable, parse_schedule_data, pretty_print_json
 
 import discord
 from discord.ext import commands
@@ -47,6 +47,45 @@ def writeJSON(data, path):
 def readJSON(path):
     with open(path) as f:
         return json.load(f)
+
+
+def get_assignment_embed(title, entry):
+    embed = discord.Embed(color=int("%x%x%x" % colormap[entry['color']], 16),
+                                                  title=title,
+                                                  description=f"[**{entry['label']}: {entry['name']}**](https://ca.prairielearn.com/pl/course_instance/{COURSE_ID}/assessment/{entry['id']}/)")
+    embed.set_footer(text="CPSC 213 on PrairieLearn")
+    embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/511797229913243649/803491233925169152/unknown.png")
+    return embed
+    
+
+def get_new_pl_dict(assessments):
+    new_pl_dict = defaultdict(list)
+    for assessment in assessments:
+        assessment_id = assessment["assessment_id"]
+        assessment_set_color = assessment["assessment_set_color"]
+        assessment_label = assessment["assessment_label"]
+        assessment_title = assessment["title"]
+        assessment_type = assessment["assessment_set_name"]
+        assessment_set_heading = assessment["assessment_set_heading"]
+        schedule_data = get_pl_data("get_assessment_access_rules",
+                                    {
+                                        "course_instance_id": COURSE_ID,
+                                        "assessment_id": assessment_id
+                                    })
+        # The different time periods for how much available credit you can get
+        assessment_periods = parse_schedule_data(schedule_data)
+
+        if len(assessment_periods) > 0:
+            new_pl_dict[assessment_set_heading].append(
+                {
+                    "id": assessment_id,
+                    "color": assessment_set_color,
+                    "label": assessment_label,
+                    "name":  assessment_title,
+                    "type": assessment_type,
+                    "modes": assessment_periods
+                })
+    return new_pl_dict
 
 
 async def status_task():
@@ -90,13 +129,18 @@ async def wipe_dms():
                 await next(i for i in guild.roles if i.name == channel.name).delete()
                 await channel.delete()
 
-def get_local_assessments():
-    ''''''
-    names = []
+
+def get_current_assessments():
+    '''Get the list of current assessments; i.e. their labels and names'''
+    ids = []
     for header in bot.pl_dict:
         for entry in bot.pl_dict[header]:
-            names.append(f"{entry['label']} {entry['name']}")
-    return names
+            ids.append(entry['id'])
+    # for header in bot.pl_dict:
+        # for entry in bot.pl_dict[header]:
+            # names.append(f"{entry['label']} {entry['name']}")
+    return ids
+
 
 async def crawl_prairielearn():
     '''Asynchronous function to get PrairieLearn data.'''
@@ -105,161 +149,92 @@ async def crawl_prairielearn():
 
     while True:
         try:
-            new_pl_dict = defaultdict(list)
-
             # Get list of assignments
-            total_assignments = get_pl_data("get_assessments", {
+            assessments = get_pl_data("get_assessments", {
                 "course_instance_id": COURSE_ID
             })
-            
-            for assignment in total_assignments:
-                assessment_id = assignment["assessment_id"]
-                schedule_data = get_pl_data("get_assessment_access_rules",
-                                            {
-                                                "course_instance_id": COURSE_ID,
-                                                "assessment_id": assessment_id
-                                            })
-                # print(json.dumps(schedule_data, indent=4))
-                # exit(0)
 
-                # The different time periods for how much available credit you can get
-                periods = []
+            new_pl_dict = get_new_pl_dict(assessments)
+            current_assessments = get_current_assessments()
 
-                not_started = False
-                for period in schedule_data:
-                    if period["uids"] is not None:
-                        continue
-
-                    starting_time = period["start_date"]
-                    if starting_time and period["credit"] == 100:
-                        start = convert_pl_time_to_unix_time(starting_time)
-                        now = time.time()
-                        if start > now:
-                            not_started = True
-                            continue
-
-                    if not period["end_date"]:
-                        end = None
-                        end_unix = 0
-                    else:
-                        end_time = period["end_date"]
-                        end_unix = convert_pl_time_to_unix_time(end_time)
-                        end = convert_unix_time_to_readable(end_unix)
-
-                    periods.append({
-                        "credit": period["credit"],
-                        "end":    end,
-                        "end_unix": end_unix,
-                        # "offset": timezone_offset
-                    })
-
-                if not_started:
-                    continue
-
-                field_data = {
-                    "id": assessment_id,
-                    "color": assignment["assessment_set_color"],
-                    "label": assignment["assessment_label"],
-                    "name":  assignment["title"],
-                    "modes": periods
-                }
-                new_pl_dict[assignment["assessment_set_heading"]].append(field_data)
-
-            seen_assessments = get_local_assessments()
-            print(seen_assessments)
-            sent = False
-
-            # Sends available assignments
             for header in new_pl_dict:
                 for entry in new_pl_dict[header]:
-                    if entry not in bot.pl_dict[header]:
-                        sent = True
-                        print("entry label", entry['label'])
-                        print("entry name", entry['name'])
-                        
-                        if f"{entry['label']} {entry['name']}" not in seen_assessments:
-                            title = f"New {['Assignment', 'Quiz'][entry['label'].startswith('Q')]}"
-                        else:
-                            title = f"{['Assignment', 'Quiz'][entry['label'].startswith('Q')]} {entry['label']} Updated,"
-                        for period in entry["modes"]:
-                            if period["credit"] == 100 and period["end"]:
-                                title += f" Due at {period['end']}"
-                                break
-                        else:
-                            title += f" (No Due Date)"
+                    sent = False
 
-                        embed = discord.Embed(color=int("%x%x%x" % colormap[entry["color"]], 16),
-                                              title=title,
-                                              description=f"[**{entry['label']}{entry['name']}**](https://ca.prairielearn.com/pl/course_instance/{COURSE_ID}/assessment/{entry['id']}/)")
-                        embed.set_footer(text="CPSC 213 on PrairieLearn")
-                        embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/511797229913243649/803491233925169152/unknown.png")
-                        await channel.send(embed=embed)
+                    # TODO: This code won't actually send a notification if a new due date is updated.
+
+                    # Send a message for new assessments
+                    if entry['id'] not in current_assessments:
+                        title = f"New {entry['type']}"
+                        sent=True
+                    
+                    found_idx = None
+                    # If ID already exists, check if a different period is now active
+                    for assessment_i in range(len(bot.pl_dict[header])):
+                        if bot.pl_dict[header][assessment_i]['id'] == entry['id']:
+                            found_idx = assessment_i
+
+                    if found_idx is not None:
+                        # Check length
+                        if len(bot.pl_dict[header][found_idx]['modes']) != len(entry["modes"]):
+                            title = f"{entry['type']} {entry['label']} updated, now"
+                        else:
+                            continue
 
                     for period in entry["modes"]:
-                        # If there's less than a day left then send this message
-                        if period["credit"] == 100 and period["end"] and (period["end_unix"] - time.time()) < 86400 and entry["label"] + " " + entry["name"] not in bot.due_tomorrow:
-                            print(bot.due_tomorrow)
-                            bot.due_tomorrow.append(entry["label"]+" "+entry["name"])
-                            hourcount = round(((period["end_unix"] + 60*period["offset"]) - time.time())/3600, 2)
+                        if period["credit"] == 100:
+                            title += f" due at {convert_unix_time_to_readable(period['end_unix'])}"
+                            break
+                    else:
+                        title += f" (No due date)"
+
+                    await channel.send(embed=get_assignment_embed(title, entry))
+
+                    # If there's less than a day left then send this message
+                    for period in entry["modes"]:
+                        if period["credit"] == 100 and (period["end_unix"] - time.time()) < 86400 and entry["id"] not in bot.due_tomorrow:
+                            bot.due_tomorrow.append(entry["id"])
+                            hourcount = round((period["end_unix"] - time.time()) / 3600, 2)
+
                             if hourcount < 0:
                                 continue
-                            embed = discord.Embed(color=int("%x%x%x" % colormap[entry["color"]], 16),
-                                                  title=f"{['Assignment', 'Quiz'][entry['label'].startswith('Q')]} {entry['label']} Due in < {hourcount} Hours\n({period['end']})",
-                                                  description=f"[**{entry['label']} {entry['name']}**](https://ca.prairielearn.com/pl/course_instance/{os.getenv('COURSE_ID')}/assessment/{entry['id']}/)")
-                            embed.set_footer(text="CPSC 213 on PrairieLearn")
-                            embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/511797229913243649/803491233925169152/unknown.png")
-                            await channel.send(embed=embed)
+
+                            title = f"{entry['type']} {entry['label']} due in < {hourcount} Hours\n({convert_unix_time_to_readable(period['end_unix'])})"
+                            await channel.send(embed=get_assignment_embed(title, entry))
                             sent = True
                             break
 
-            #if sent:
-                #await channel.send(f"<@&{os.getenv('NOTIF_ROLE')}>")
+            # if sent is True:
+                # await channel.send(f"<@&{os.getenv('NOTIF_ROLE')}>")
 
+            # Write the new dictionary to the bot dictionary
             bot.pl_dict = new_pl_dict
             writeJSON(dict(bot.pl_dict), "data/pl.json")
-            writeJSON(bot.due_tomorrow, "data/tomorrow.json")
+            # writeJSON(bot.due_tomorrow, "data/tomorrow.json")
 
-            current_time = datetime.utcfromtimestamp(time.time() - (7 * 60 * 60)).strftime('%Y-%m-%d %H:%M:%S')
+            current_time = convert_unix_time_to_readable(time.time())
             
             embed = discord.Embed(title=f'{"Current Assessments on CPSC 213 PrairieLearn"}',
-                                  description=f'{"Updates every 30 minutes, last checked {current_time}"}',
+                                  description=f"Updates every 30 minutes, last checked {current_time}.\n\n This dashboard may not accurately reflect the actual due dates. Always check the **[Prairielearn website](https://ca.prairielearn.com/pl/course_instance/4486)**!",
                                   color=0x8effc1)
 
-            # What channel is this?
-            dashboard_channel = bot.get_channel(PL_DASHBOARD_CHANNEL_ID)
-
-            for assigntype in bot.pl_dict:
-                entrylist = bot.pl_dict[assigntype]
-                formattedentries = []
-                seenmodes = []
+            for assessment_type in bot.pl_dict:
+                entrylist = bot.pl_dict[assessment_type]
+                formatted_entries = []
                 for entry in entrylist:
                     skip = False
-                    formatted = f"`{entry['label']}` **[{entry['name']}](https://ca.prairielearn.com/pl/course_instance/{os.getenv('COURSE_ID')}/assessment/{entry['id']}/)**\nCredit:\n"
+                    formatted = f"**[{entry['label']}: {entry['name']}](https://ca.prairielearn.com/pl/course_instance/{os.getenv('COURSE_ID')}/assessment/{entry['id']}/)**\nCredit:\n"
                     for period in entry["modes"]:
-                        if period['end'] and period['credit'] == 100:
-                            timezone_offset = int(period["end"][-1])
-                            now = time.time() - timezone_offset * 60
-                            if period['end_unix'] < now:
-                                skip = True
-                                break
+                        fmt = f"· {period['credit']}% until {convert_unix_time_to_readable(period['end_unix'])}\n"
+                        formatted += fmt
 
-                        fmt = f"· {period['credit']}% until {period['end']}\n"
-                        if fmt not in seenmodes:
-                            formatted += fmt
-                            seenmodes.append(fmt)
+                    formatted_entries.append(formatted)
+                embed.add_field(name=f"\u200b\n***{assessment_type.upper()}***", value = "\n".join(formatted_entries) + '\u200b', inline = False)
+            embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/511797229913243649/803491233925169152/unknown.png")
 
-                    if skip: continue
-
-                    formattedentries.append(formatted)
-                embed.add_field(name = f"\u200b\n***{assigntype.upper()}***", value = "\n".join(formattedentries) + '\u200b', inline = False)
-            
-            embed.set_thumbnail(url = "https://cdn.discordapp.com/attachments/511797229913243649/803491233925169152/unknown.png")
-
-            pl_dashboard_message = await dashboard_channel.send(embed=embed)
-            # msg = await thechannel.fetch_message(pl_dashboard_message.id)
-
-            # await msg.edit(embed = embed)
+            await bot.pl_dashboard_message.edit(content=None, embed=embed)
             await asyncio.sleep(1800)
+
         except Exception as error:
             await channel.send(str(error))
             etype = type(error)
@@ -307,7 +282,11 @@ async def on_ready():
     if "tomorrow.json" not in os.listdir("data"):
         writeJSON({}, "data/tomorrow.json")
     bot.pl_dict = defaultdict(list, readJSON("data/pl.json"))
-    bot.due_tomorrow = readJSON("data/tomorrow.json")
+    # bot.due_tomorrow = readJSON("data/tomorrow.json")
+    
+    dashboard_channel = bot.get_channel(PL_DASHBOARD_CHANNEL_ID)
+    bot.pl_dashboard_message = await dashboard_channel.send("hello world")
+
     bot.loop.create_task(status_task())
     bot.loop.create_task(wipe_dms())
     bot.loop.create_task(crawl_prairielearn())
