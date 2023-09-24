@@ -11,6 +11,7 @@ import sys
 from collections import defaultdict
 from datetime import datetime
 from os.path import isfile, join
+from helper import convert_pl_time_to_unix_time, convert_unix_time_to_readable
 
 import discord
 from discord.ext import commands
@@ -20,26 +21,36 @@ from util.badargs import BadArgs
 from prairiepy import PrairieLearn, colormap
 
 load_dotenv()
+
+# Environment variables
 CS213BOT_KEY = os.getenv("CS213BOT_KEY")
+PL_DASHBOARD_CHANNEL_ID = int(os.getenv("PL_DASHBOARD_CHANNEL"))
+COURSE_ID = int(os.getenv("COURSE_ID"))
+NOTIF_CHANNEL_ID = int(os.getenv("NOTIF_CHANNEL"))
+PL_TOKEN = os.getenv("PLTOKEN")
 
 bot = commands.Bot(command_prefix="!", help_command=None, intents=discord.Intents.all())
 bot.pl_dict = defaultdict(list)
 bot.due_tomorrow = []
-bot.pl = PrairieLearn(os.getenv("PLTOKEN"), api_server_url = "https://ca.prairielearn.com/pl/api/v1")
+bot.pl = PrairieLearn(PL_TOKEN, api_server_url= "https://ca.prairielearn.com/pl/api/v1")
 
 for extension in filter(lambda f: isfile(join("cogs", f)) and f != "__init__.py", os.listdir("cogs")):
     bot.load_extension(f"cogs.{extension[:-3]}")
     print(f"{extension} module loaded")
 
+
 def writeJSON(data, path):
     with open(path, "w") as f:
-        json.dump(data, f, indent = 4)
+        json.dump(data, f, indent=4)
+
 
 def readJSON(path):
     with open(path) as f:
         return json.load(f)
 
+
 async def status_task():
+    '''Starts a random status task.'''
     await bot.wait_until_ready()
 
     while not bot.is_closed():
@@ -80,96 +91,124 @@ async def wipe_dms():
                 await channel.delete()
 
 def get_local_assessments():
+    ''''''
     names = []
     for header in bot.pl_dict:
         for entry in bot.pl_dict[header]:
             names.append(f"{entry['label']} {entry['name']}")
     return names
 
-
 async def crawl_prairielearn():
-    channel = bot.get_channel(int(os.getenv("NOTIF_CHANNEL")))
+    '''Asynchronous function to get PrairieLearn data.'''
+    # Get Notification channel
+    channel = bot.get_channel(NOTIF_CHANNEL_ID)
+
     while True:
-        try: 
+        try:
             new_pl_dict = defaultdict(list)
-            total_assignments = get_pl_data("get_assessments", {"course_instance_id": int(os.getenv("COURSE_ID"))})
+
+            # Get list of assignments
+            total_assignments = get_pl_data("get_assessments", {
+                "course_instance_id": COURSE_ID
+            })
+            
             for assignment in total_assignments:
                 assessment_id = assignment["assessment_id"]
-                schedule_data = get_pl_data("get_assessment_access_rules", {"course_instance_id": int(os.getenv("COURSE_ID")), "assessment_id": assessment_id})
-                modes = []
-                not_started = False
-                for mode in schedule_data:
-                    if mode["uids"] != None: continue
-                    if mode["start_date"]:
-                        offset = int(mode["start_date"][-1])
-                    else:
-                        offset = 0
+                schedule_data = get_pl_data("get_assessment_access_rules",
+                                            {
+                                                "course_instance_id": COURSE_ID,
+                                                "assessment_id": assessment_id
+                                            })
+                # print(json.dumps(schedule_data, indent=4))
+                # exit(0)
 
-                    if mode["start_date"] and mode["credit"] == 100:
-                        start = time.mktime(time.strptime("-".join(mode["start_date"].split("-")[:-1]), "%Y-%m-%dT%H:%M:%S"))
-                        now = time.time() - offset * 60
-                        if start > now: 
+                # The different time periods for how much available credit you can get
+                periods = []
+
+                not_started = False
+                for period in schedule_data:
+                    if period["uids"] is not None:
+                        continue
+
+                    starting_time = period["start_date"]
+                    if starting_time and period["credit"] == 100:
+                        start = convert_pl_time_to_unix_time(starting_time)
+                        now = time.time()
+                        if start > now:
                             not_started = True
-                            break
-                    
-                    if not mode["end_date"]: 
+                            continue
+
+                    if not period["end_date"]:
                         end = None
                         end_unix = 0
-                    else: 
-                        end_unix = time.strptime("-".join(mode["end_date"].split("-")[:-1]), "%Y-%m-%dT%H:%M:%S")
-                        end = time.strftime("%H:%M PST, %a, %b, %d", end_unix)
-                        end_unix = time.mktime(end_unix)
+                    else:
+                        end_time = period["end_date"]
+                        end_unix = convert_pl_time_to_unix_time(end_time)
+                        end = convert_unix_time_to_readable(end_unix)
 
-                    modes.append({
-                        "credit": mode["credit"],
+                    periods.append({
+                        "credit": period["credit"],
                         "end":    end,
                         "end_unix": end_unix,
-                        "offset": offset
+                        # "offset": timezone_offset
                     })
 
                 if not_started:
                     continue
 
-                fielddata = {
+                field_data = {
                     "id": assessment_id,
-                    "color": assignment["assessment_set_color"], 
+                    "color": assignment["assessment_set_color"],
                     "label": assignment["assessment_label"],
                     "name":  assignment["title"],
-                    "modes": modes
+                    "modes": periods
                 }
-                new_pl_dict[assignment["assessment_set_heading"]].append(fielddata)
+                new_pl_dict[assignment["assessment_set_heading"]].append(field_data)
 
             seen_assessments = get_local_assessments()
+            print(seen_assessments)
             sent = False
+
+            # Sends available assignments
             for header in new_pl_dict:
                 for entry in new_pl_dict[header]:
                     if entry not in bot.pl_dict[header]:
                         sent = True
+                        print("entry label", entry['label'])
+                        print("entry name", entry['name'])
+                        
                         if f"{entry['label']} {entry['name']}" not in seen_assessments:
                             title = f"New {['Assignment', 'Quiz'][entry['label'].startswith('Q')]}"
                         else:
                             title = f"{['Assignment', 'Quiz'][entry['label'].startswith('Q')]} {entry['label']} Updated,"
-                        for mode in entry["modes"]:
-                            if mode["credit"] == 100 and mode["end"]:
-                                title += f" Due at {mode['end']}"
+                        for period in entry["modes"]:
+                            if period["credit"] == 100 and period["end"]:
+                                title += f" Due at {period['end']}"
                                 break
                         else:
                             title += f" (No Due Date)"
 
-                        embed = discord.Embed(color = int("%x%x%x" % colormap[entry["color"]], 16), title = title, description = f"[**{entry['label']} {entry['name']}**](https://ca.prairielearn.com/pl/course_instance/{os.getenv('COURSE_ID')}/assessment/{entry['id']}/)")
-                        embed.set_footer(text = "CPSC 213 on PrairieLearn")
-                        embed.set_thumbnail(url = "https://cdn.discordapp.com/attachments/511797229913243649/803491233925169152/unknown.png")
-                        await channel.send(embed = embed)
+                        embed = discord.Embed(color=int("%x%x%x" % colormap[entry["color"]], 16),
+                                              title=title,
+                                              description=f"[**{entry['label']}{entry['name']}**](https://ca.prairielearn.com/pl/course_instance/{COURSE_ID}/assessment/{entry['id']}/)")
+                        embed.set_footer(text="CPSC 213 on PrairieLearn")
+                        embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/511797229913243649/803491233925169152/unknown.png")
+                        await channel.send(embed=embed)
 
-                    for mode in entry["modes"]:
-                        if mode["credit"] == 100 and mode["end"] and (mode["end_unix"] + 60*mode["offset"]) - time.time() < 86400 and entry["label"] + " " + entry["name"] not in bot.due_tomorrow:
+                    for period in entry["modes"]:
+                        # If there's less than a day left then send this message
+                        if period["credit"] == 100 and period["end"] and (period["end_unix"] - time.time()) < 86400 and entry["label"] + " " + entry["name"] not in bot.due_tomorrow:
+                            print(bot.due_tomorrow)
                             bot.due_tomorrow.append(entry["label"]+" "+entry["name"])
-                            hourcount = round(((mode["end_unix"] + 60*mode["offset"]) - time.time())/3600, 2)
-                            if hourcount < 0: continue
-                            embed = discord.Embed(color = int("%x%x%x" % colormap[entry["color"]], 16), title = f"{['Assignment', 'Quiz'][entry['label'].startswith('Q')]} {entry['label']} Due in < {hourcount} Hours\n({mode['end']})", description = f"[**{entry['label']} {entry['name']}**](https://ca.prairielearn.com/pl/course_instance/{os.getenv('COURSE_ID')}/assessment/{entry['id']}/)")
-                            embed.set_footer(text = "CPSC 213 on PrairieLearn")
-                            embed.set_thumbnail(url = "https://cdn.discordapp.com/attachments/511797229913243649/803491233925169152/unknown.png")
-                            await channel.send(embed = embed)
+                            hourcount = round(((period["end_unix"] + 60*period["offset"]) - time.time())/3600, 2)
+                            if hourcount < 0:
+                                continue
+                            embed = discord.Embed(color=int("%x%x%x" % colormap[entry["color"]], 16),
+                                                  title=f"{['Assignment', 'Quiz'][entry['label'].startswith('Q')]} {entry['label']} Due in < {hourcount} Hours\n({period['end']})",
+                                                  description=f"[**{entry['label']} {entry['name']}**](https://ca.prairielearn.com/pl/course_instance/{os.getenv('COURSE_ID')}/assessment/{entry['id']}/)")
+                            embed.set_footer(text="CPSC 213 on PrairieLearn")
+                            embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/511797229913243649/803491233925169152/unknown.png")
+                            await channel.send(embed=embed)
                             sent = True
                             break
 
@@ -179,9 +218,16 @@ async def crawl_prairielearn():
             bot.pl_dict = new_pl_dict
             writeJSON(dict(bot.pl_dict), "data/pl.json")
             writeJSON(bot.due_tomorrow, "data/tomorrow.json")
-            thetime = datetime.utcfromtimestamp(time.time() - (7 * 60 * 60)).strftime('%Y-%m-%d %H:%M:%S')
-            embed = discord.Embed(title = f"Current Assessments on CPSC 213 PrairieLearn", description = f"Updates every 30 minutes, last checked {thetime}", color = 0x8effc1)
-            thechannel = bot.get_channel(884874356654735413)
+
+            current_time = datetime.utcfromtimestamp(time.time() - (7 * 60 * 60)).strftime('%Y-%m-%d %H:%M:%S')
+            
+            embed = discord.Embed(title=f'{"Current Assessments on CPSC 213 PrairieLearn"}',
+                                  description=f'{"Updates every 30 minutes, last checked {current_time}"}',
+                                  color=0x8effc1)
+
+            # What channel is this?
+            dashboard_channel = bot.get_channel(PL_DASHBOARD_CHANNEL_ID)
+
             for assigntype in bot.pl_dict:
                 entrylist = bot.pl_dict[assigntype]
                 formattedentries = []
@@ -189,15 +235,15 @@ async def crawl_prairielearn():
                 for entry in entrylist:
                     skip = False
                     formatted = f"`{entry['label']}` **[{entry['name']}](https://ca.prairielearn.com/pl/course_instance/{os.getenv('COURSE_ID')}/assessment/{entry['id']}/)**\nCredit:\n"
-                    for mode in entry["modes"]:
-                        if mode['end'] and mode['credit'] == 100:
-                            offset = int(mode["end"][-1])
-                            now = time.time() - offset * 60
-                            if mode['end_unix'] < now:
+                    for period in entry["modes"]:
+                        if period['end'] and period['credit'] == 100:
+                            timezone_offset = int(period["end"][-1])
+                            now = time.time() - timezone_offset * 60
+                            if period['end_unix'] < now:
                                 skip = True
                                 break
 
-                        fmt = f"· {mode['credit']}% until {mode['end']}\n"
+                        fmt = f"· {period['credit']}% until {period['end']}\n"
                         if fmt not in seenmodes:
                             formatted += fmt
                             seenmodes.append(fmt)
@@ -208,8 +254,11 @@ async def crawl_prairielearn():
                 embed.add_field(name = f"\u200b\n***{assigntype.upper()}***", value = "\n".join(formattedentries) + '\u200b', inline = False)
             
             embed.set_thumbnail(url = "https://cdn.discordapp.com/attachments/511797229913243649/803491233925169152/unknown.png")
-            msg = await thechannel.fetch_message(886048835183460384)
-            await msg.edit(embed = embed)
+
+            pl_dashboard_message = await dashboard_channel.send(embed=embed)
+            # msg = await thechannel.fetch_message(pl_dashboard_message.id)
+
+            # await msg.edit(embed = embed)
             await asyncio.sleep(1800)
         except Exception as error:
             await channel.send(str(error))
