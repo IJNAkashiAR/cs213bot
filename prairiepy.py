@@ -41,6 +41,7 @@ colormap = {
         "gray3": (80, 80, 80)
     }
 
+
 class PrairieLearn:
 
     # Class methods
@@ -60,7 +61,7 @@ class PrairieLearn:
 
     # API query methods
 
-    def query(self,url):
+    def query(self, url):
         '''Returns the response of a PrairieLearn API query'''
         return requests.get(url, headers=self.api_headers)
 
@@ -138,3 +139,27 @@ class PrairieLearn:
     def get_assessment_instance_log(self):
         """The event log for a specific assessment"""
         return self._route_assessment_instance('/log')
+
+    def get_pl_data(self, method, options):
+        # based on https://github.com/PrairieLearn/PrairieLearn/blob/master/tools/api_download.py
+        import time
+        retry_502_max = 30
+        retry_502_i = 0
+        while True:
+            r = getattr(self, method)(options)
+            if r.status_code == 200:
+                break
+            elif r.status_code == 502:
+                retry_502_i += 1
+                if retry_502_i >= retry_502_max:
+                    raise Exception(f'Maximum number of retries reached on 502 Bad Gateway Error')
+                else:
+                    time.sleep(10)
+                    continue
+            else:
+                raise Exception(f'Invalid status returned: {r.status_code}')
+
+        data = r.json()
+        return data
+
+
