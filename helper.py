@@ -1,6 +1,7 @@
 import time
-import datetime
+from datetime import datetime
 import json
+
 
 def convert_pl_time_to_unix_time(pl_time):
     '''Returns the unix time given a Prairielearn formatted time string.'''
@@ -9,10 +10,11 @@ def convert_pl_time_to_unix_time(pl_time):
 
 def convert_unix_time_to_readable(unix_time):
     '''Returns a readable time string from unix time.'''
-    return datetime.datetime.utcfromtimestamp(unix_time).strftime("%H:%M PST, %a, %b, %d", )
+    return datetime.utcfromtimestamp(unix_time).strftime("%H:%M PST, %a, %b, %d", )
+
 
 def parse_schedule_data(schedule_data):
-    '''Takes the schedule data for an assessment and returns the periods for that assessment.'''
+    '''Takes schedule data for an assessment and returns the periods.'''
     periods = []
     for period in schedule_data:
         if period["mode"] != "Public":
@@ -43,7 +45,7 @@ def parse_schedule_data(schedule_data):
                 continue
         else:
             end_unix = 0
-            
+
         periods.append({
             "credit": credit,
             "start_unix": start_unix,
@@ -54,4 +56,14 @@ def parse_schedule_data(schedule_data):
 
 
 def pretty_print_json(data):
-    print(json.dumps(data, indent=2)) 
+    print(json.dumps(data, indent=2))
+
+
+def writeJSON(data, path):
+    with open(path, "w") as f:
+        json.dump(data, f, indent=4)
+
+
+def readJSON(path):
+    with open(path) as f:
+        return json.load(f)

@@ -43,7 +43,7 @@ colormap = {
 
 
 class PrairieLearn:
-
+    '''Queries PrairieLearn API'''
     # Class methods
 
     def __init__(
