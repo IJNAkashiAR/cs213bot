@@ -4,3 +4,8 @@ result.json
 result2.json
 result3.json
 data
+/.idea/
+/__pycache__/*.pyc
+/build/
+/cs213bot.egg-info/
+/venv/

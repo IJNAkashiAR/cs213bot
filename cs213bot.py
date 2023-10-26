@@ -9,19 +9,20 @@ import traceback
 import sys
 from assessment import Assessment
 from schedule import Period
+from crawler import PrairieLearnCrawler
 from dashboard import Dashboard
+from notifications import Notification
 
 from collections import defaultdict
 from datetime import datetime
 from os.path import isfile, join
-from helper import convert_pl_time_to_unix_time, convert_unix_time_to_readable, parse_schedule_data, pretty_print_json, writeJSON, readJSON
 
 import discord
 from discord.ext import commands
 
 from util.badargs import BadArgs
 from prairiepy import PrairieLearn, colormap
-from globals import CS213BOT_KEY, PL_DASHBOARD_CHANNEL_ID, COURSE_ID, NOTIF_CHANNEL_ID, PL_TOKEN, SERVER_ID
+from globals import CS213BOT_KEY, DASHBOARD_CHANNEL_ID, COURSE_ID, NOTIF_CHANNEL_ID, PL_TOKEN, SERVER_ID
 
 
 bot = commands.Bot(command_prefix="!",
@@ -136,7 +137,7 @@ async def crawl_prairielearn():
     '''Asynchronous function to get PrairieLearn data.'''
     # Get Notification channel
     channel = bot.get_channel(NOTIF_CHANNEL_ID)
-
+    global current_assessments
     while True:
         try:
             # Get list of assignments
@@ -249,9 +250,12 @@ async def on_ready():
         writeJSON({}, "data/tomorrow.json")
     bot.pl_dict = defaultdict(list, readJSON("data/pl.json"))
     # bot.due_tomorrow = readJSON("data/tomorrow.json")
-
-    await bot.add_cog(Dashboard(bot, PL_DASHBOARD_CHANNEL_ID))
-    await bot.add_cog(Dashboard(bot, PL_DASHBOARD_CHANNEL_ID))
+    dashboard = Dashboard(DASHBOARD_CHANNEL_ID, bot)
+    notifs = Notification(NOTIF_CHANNEL_ID, bot)
+    await bot.add_cog(PrairieLearnCrawler(bot,
+                                          [dashboard.update_dashboard,
+                                           notifs.send_notification],
+                                          COURSE_ID))
 
     bot.loop.create_task(status_task())
     bot.loop.create_task(wipe_dms())
@@ -267,7 +271,7 @@ async def on_message_edit(before, after):
 async def on_message(message):
     if isinstance(message.channel, discord.abc.PrivateChannel):
         return
-        
+
     if not message.author.bot:
         # debugging
         # with open("messages.txt", "a") as f:
@@ -286,6 +290,7 @@ async def on_message(message):
             bot.get_cog("SM213").queue.append([message.author.id, time.time()])
 
         await bot.process_commands(message)
+
 
 @bot.event
 async def on_command_error(ctx, error):
