@@ -159,17 +159,17 @@ async def crawl_prairielearn():
                         embed = discord.Embed(color = int("%x%x%x" % colormap[entry["color"]], 16), title = title, description = f"[**{entry['label']} {entry['name']}**](https://ca.prairielearn.com/pl/course_instance/{os.getenv('COURSE_ID')}/assessment/{entry['id']}/)")
                         embed.set_footer(text = "CPSC 213 on PrairieLearn")
                         embed.set_thumbnail(url = "https://cdn.discordapp.com/attachments/511797229913243649/803491233925169152/unknown.png")
-                        await channel.send(embed = embed)
+                        # await channel.send(embed = embed)
 
                     for mode in entry["modes"]:
                         if mode["credit"] == 100 and mode["end"] and (mode["end_unix"] + 60*mode["offset"]) - time.time() < 86400 and entry["label"] + " " + entry["name"] not in bot.due_tomorrow:
-                            bot.due_tomorrow.append(entry["label"]+" "+entry["name"])
+                            # bot.due_tomorrow.append(entry["label"]+" "+entry["name"])
                             hourcount = round(((mode["end_unix"] + 60*mode["offset"]) - time.time())/3600, 2)
                             if hourcount < 0: continue
                             embed = discord.Embed(color = int("%x%x%x" % colormap[entry["color"]], 16), title = f"{['Assignment', 'Quiz'][entry['label'].startswith('Q')]} {entry['label']} Due in < {hourcount} Hours\n({mode['end']})", description = f"[**{entry['label']} {entry['name']}**](https://ca.prairielearn.com/pl/course_instance/{os.getenv('COURSE_ID')}/assessment/{entry['id']}/)")
                             embed.set_footer(text = "CPSC 213 on PrairieLearn")
                             embed.set_thumbnail(url = "https://cdn.discordapp.com/attachments/511797229913243649/803491233925169152/unknown.png")
-                            await channel.send(embed = embed)
+                            # await channel.send(embed = embed)
                             sent = True
                             break
 
@@ -208,8 +208,8 @@ async def crawl_prairielearn():
                 embed.add_field(name = f"\u200b\n***{assigntype.upper()}***", value = "\n".join(formattedentries) + '\u200b', inline = False)
             
             embed.set_thumbnail(url = "https://cdn.discordapp.com/attachments/511797229913243649/803491233925169152/unknown.png")
-            msg = await thechannel.fetch_message(886048835183460384)
-            await msg.edit(embed = embed)
+            # msg = await thechannel.fetch_message(886048835183460384)
+            # await msg.edit(embed = embed)
             await asyncio.sleep(1800)
         except Exception as error:
             await channel.send(str(error))
