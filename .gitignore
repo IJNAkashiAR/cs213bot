@@ -4,3 +4,6 @@ result.json
 result2.json
 result3.json
 data
+/cs213bot.egg-info/
+/build/
+/venv/
