@@ -4,7 +4,7 @@ CS213Bot is a [Discord](https://discord.com/) [bot](https://discord.com/develope
 
 ## Installation
 
-Clone the repo to your computer, and ensure your Discord Bot [Token](https://discord.com/developers/docs/intro) is set as a environmental variable named `CS213BOT_KEY`.
+Read the [installation guide](instructions/INSTRUCTIONS.md) Clone the repo to your computer, and ensure your Discord Bot [Token](https://discord.com/developers/docs/intro) is set as a environmental variable named `CS213BOT_KEY`.
 
 ## Dependencies
 
