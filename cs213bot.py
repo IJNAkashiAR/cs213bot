@@ -40,9 +40,8 @@ def readJSON(path):
 bot = commands.Bot(command_prefix="!", help_command=None, intents=discord.Intents.all())
 
 @bot.event
-async def setup_hook() -> None:
+async def on_ready() -> None:
     discord.utils.setup_logging()
-    loaded_modules=0
     extensions=filter(lambda f: isfile(join("cogs", f)) and f != "__init__.py",
                       os.listdir("cogs"))
 
@@ -50,10 +49,36 @@ async def setup_hook() -> None:
     for extension in extensions:
         try:
             await bot.load_extension(Path(f"cogs."+extension).stem)
-        except:
-            logging.error(f"{extension} module could not be loaded")
+        except Exception as e:
+            logging.error(f"{extension} module could not be loaded. {e}")
             continue
         logging.info(f"{extension} module loaded")
+
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound) or isinstance(error, discord.HTTPException) or isinstance(error, discord.NotFound) or isinstance(error, commands.errors.NotOwner):
+        pass
+    elif isinstance(error, BadArgs) or str(type(error)) == "<class 'cogs.meta.BadArgs'>":
+        await error.print(ctx)
+    elif isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(f"Oops! That command is on cooldown right now. Please wait **{round(error.retry_after, 3)}** seconds before trying again.", delete_after=error.retry_after)
+    elif isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send(f"The required argument(s) {error.param} is/are missing.", delete_after=5)
+    elif isinstance(error, commands.DisabledCommand):
+        await ctx.send("This command is disabled.", delete_after=5)
+    elif isinstance(error, commands.MissingPermissions) or isinstance(error, commands.BotMissingPermissions):
+        await ctx.send(error, delete_after=5)
+    else:
+        etype = type(error)
+        trace = error.__traceback__
+
+        try:
+            await ctx.send(("```python\n" + "".join(traceback.format_exception(etype, error, trace, 999)) + "```").replace("home/rq2/.local/lib/python3.9/site-packages/", ""))
+        except Exception:
+            print(("".join(traceback.format_exception(etype, error, trace, 999))).replace("home/rq2/.local/lib/python3.9/site-packages/", ""))
+
+
 
 bot.pl_dict = defaultdict(list)
 bot.due_tomorrow = []
@@ -61,45 +86,6 @@ bot.pl = PrairieLearn(os.getenv("PLTOKEN"), api_server_url = "https://ca.prairie
 
 bot.run(CS213BOT_KEY)
 
-# async def status_task():
-#     await bot.wait_until_ready()
-
-#     while not bot.is_closed():
-#         online_members = {member for guild in bot.guilds for member in guild.members if not member.bot and member.status != discord.Status.offline}
-
-#         play = ["with the \"help\" command", " ", "with your mind", "ƃuᴉʎɐlԀ", "...something?",
-#                 "a game? Or am I?", "¯\_(ツ)_/¯", f"with {len(online_members)} people", "with the Simple Machine"]
-#         listen = ["smart music", "... wait I can't hear anything"]
-#         watch = ["TV", "YouTube vids", "over you",
-#                  "how to make a bot", "C tutorials", "sm213 execute", "I, Robot"]
-
-#         rng = random.randrange(0, 3)
-
-#         if rng == 0:
-#             await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name=random.choice(play)))
-#         elif rng == 1:
-#             await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=random.choice(listen)))
-#         else:
-#             await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=random.choice(watch)))
-
-#         await asyncio.sleep(30)
-
-
-# async def wipe_dms():
-#     guild = bot.get_guild(int(os.getenv("SERVER_ID")))
-#     while True:
-#         await asyncio.sleep(300)
-#         bot.get_cog("SM213").queue = list(filter(lambda x: time.time() - x[1] < 300, bot.get_cog("SM213").queue))
-#         now = datetime.utcnow()
-#         for channel in filter(lambda c: c.name.startswith("213dm-"), guild.channels):
-#             async for msg in channel.history(limit=1):
-#                 if (now - msg.created_at).total_seconds() >= 86400:
-#                     await next(i for i in guild.roles if i.name == channel.name).delete()
-#                     await channel.delete()
-#                     break
-#             else:
-#                 await next(i for i in guild.roles if i.name == channel.name).delete()
-#                 await channel.delete()
 
 # def get_local_assessments():
 #     names = []
@@ -316,27 +302,3 @@ bot.run(CS213BOT_KEY)
 #             bot.get_cog("SM213").queue.append([message.author.id, time.time()])
 
 #         await bot.process_commands(message)
-
-# @bot.event
-# async def on_command_error(ctx, error):
-#     if isinstance(error, commands.CommandNotFound) or isinstance(error, discord.HTTPException) or isinstance(error, discord.NotFound) or isinstance(error, commands.errors.NotOwner):
-#         pass
-#     elif isinstance(error, BadArgs) or str(type(error)) == "<class 'cogs.meta.BadArgs'>":
-#         await error.print(ctx)
-#     elif isinstance(error, commands.CommandOnCooldown):
-#         await ctx.send(f"Oops! That command is on cooldown right now. Please wait **{round(error.retry_after, 3)}** seconds before trying again.", delete_after=error.retry_after)
-#     elif isinstance(error, commands.MissingRequiredArgument):
-#         await ctx.send(f"The required argument(s) {error.param} is/are missing.", delete_after=5)
-#     elif isinstance(error, commands.DisabledCommand):
-#         await ctx.send("This command is disabled.", delete_after=5)
-#     elif isinstance(error, commands.MissingPermissions) or isinstance(error, commands.BotMissingPermissions):
-#         await ctx.send(error, delete_after=5)
-#     else:
-#         etype = type(error)
-#         trace = error.__traceback__
-
-#         try:
-#             await ctx.send(("```python\n" + "".join(traceback.format_exception(etype, error, trace, 999)) + "```").replace("home/rq2/.local/lib/python3.9/site-packages/", ""))
-#         except Exception:
-#             print(("".join(traceback.format_exception(etype, error, trace, 999))).replace("home/rq2/.local/lib/python3.9/site-packages/", ""))
-
