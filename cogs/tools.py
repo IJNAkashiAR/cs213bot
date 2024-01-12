@@ -96,5 +96,5 @@ https://media.discordapp.net/attachments/752006091021484052/804239617134034984/u
 https://media.discordapp.net/attachments/752006091021484052/804239471658795028/unknown.png""")
 
 
-def setup(bot):
-    bot.add_cog(Tools(bot))
+async def setup(bot: commands.Bot):
+    await bot.add_cog(Tools(bot))

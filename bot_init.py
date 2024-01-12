@@ -11,6 +11,7 @@ from os.path import isfile, join
 import os
 
 from discord.ext.commands.bot import asyncio, sys
+from discord.ext import tasks
 import re
 from prairiepy import PrairieLearn, colormap
 from pathlib import Path
@@ -27,7 +28,7 @@ def readJSON(path):
         return json.load(f)
 
 def setup_events(bot: commands.Bot):
-    
+
     @bot.event
     async def on_ready():
         '''Procedure that runs when the bot is ready to start.
@@ -107,7 +108,7 @@ def setup_events(bot: commands.Bot):
             except Exception:
                 print(("".join(traceback.format_exception(etype, error, trace, 999))).replace("home/rq2/.local/lib/python3.9/site-packages/", ""))
 
-def setup_loops(bot: commands.Bot):
+async def setup_loops(bot: commands.Bot):
 
     async def status_task():
         await bot.wait_until_ready()
@@ -319,21 +320,21 @@ def setup_loops(bot: commands.Bot):
     
 
 
-async def create_bot() -> commands.Bot:
+def create_bot() -> commands.Bot:
+    '''Creates a new bot and loads its extensions
 
-    bot = commands.Bot(command_prefix="!", help_command=None, intents=discord.Intents.all())
-
-    # Load extensions in the cogs directory
-    for extension in filter(lambda f: isfile(join("cogs", f)) and f != "__init__.py", os.listdir("cogs")):
-        _ = bot.load_extension(Path(f"cogs."+extension).stem)
-        print(f"{extension} module loaded")
+    Returns
+    -------
+    - Bot: the Discord bot object
+    '''
+    print("creating bot")
     
-    # setup_events(bot)
+    print("extensions loaded")
     # setup_loops(bot)
 
     # bot.loop.create_task(status_task())
     # bot.loop.create_task(wipe_dms())
     # bot.loop.create_task(crawl_prairielearn())
 
-
     return bot
+

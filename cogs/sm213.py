@@ -1157,7 +1157,5 @@ async def mbed(ctx, upper, lower, fields = [], thumbnail = None, footer = None):
         
     return await ctx.send(embed = embed)
 
-
-def setup(bot):
-    # module loader
-    bot.add_cog(SM213(bot))
+async def setup(bot: commands.Bot):
+    await bot.add_cog(SM213(bot))
