@@ -37,15 +37,22 @@ def readJSON(path):
     with open(path) as f:
         return json.load(f)
 
-bot = commands.Bot(command_prefix="!", help_command=None, intents=discord.Intents.all(), log_level=logging.DEBUG)
+bot = commands.Bot(command_prefix="!", help_command=None, intents=discord.Intents.all())
 
 @bot.event
 async def setup_hook() -> None:
     discord.utils.setup_logging()
+    loaded_modules=0
+    extensions=filter(lambda f: isfile(join("cogs", f)) and f != "__init__.py",
+                      os.listdir("cogs"))
+
     # Load extensions in the cogs directory
-    for extension in filter(lambda f: isfile(join("cogs", f)) and f != "__init__.py",
-                            os.listdir("cogs")):
-        await bot.load_extension(Path(f"cogs."+extension).stem)
+    for extension in extensions:
+        try:
+            await bot.load_extension(Path(f"cogs."+extension).stem)
+        except:
+            logging.error(f"{extension} module could not be loaded")
+            continue
         logging.info(f"{extension} module loaded")
 
 bot.pl_dict = defaultdict(list)
