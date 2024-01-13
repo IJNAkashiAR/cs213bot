@@ -7,6 +7,7 @@ from os.path import isfile, join
 
 import discord
 from discord.ext import commands
+from discord.ext.commands.bot import logging
 
 from util.badargs import BadArgs
 import json
@@ -356,16 +357,20 @@ class Meta(commands.Cog):
         **Examples:**
         `!help` [embed]
         """
-
+        
         if not arg:
             embed = discord.Embed(title="CS213 Bot", description="Commands:", colour=random.randint(0, 0xFFFFFF), timestamp=datetime.utcnow())
             embed.add_field(name=f"❗ Current Prefix: `{self.bot.command_prefix}`", value="\u200b", inline=False)
 
             for k, v in self.bot.cogs.items():
-                embed.add_field(name=k, value=" ".join(f"`{i}`" for i in v.get_commands() if not i.hidden), inline=False)
+                # Hides non-command cogs from view
+                commands_list = [i for i in v.get_commands() if not i.hidden]
+                if len(commands_list) != 0:
+                    embed.add_field(name=k, value=" ".join(f"`{i}`" for i in commands_list), inline=False)
 
             embed.set_thumbnail(url=self.bot.user.avatar)
-            embed.add_field(name = "_ _\nSupport Bot Development: visit the CS213Bot repo at https://github.com/jbrightuniverse/cs213bot/", value = "_ _\nCS213Bot is based on CS221Bot. Support them at https://github.com/Person314159/cs221bot/\n\nCall ++help to access C++Bot from within this bot.\nhttps://github.com/jbrightuniverse/C-Bot")
+            embed.add_field(name = "_ _\nSupport Bot Development by contributing!", value="Visit the [CS213Bot repo](https://github.com/IJNAkashiAR/cs213bot). Original bot was written by [jbrightuniverse et al.](https://github.com/jbrightuniverse/cs213bot/)", inline=False)
+            embed.add_field(name = "_ _\nCS213Bot is based on CS221Bot.", value = "Support them at https://github.com/Person314159/cs221bot/", inline=False)
             embed.set_footer(text=f"The sm213 language was created by Dr. Mike Feeley of the CPSC department at UBCV.\nUsed with permission.\n\nRequested by {ctx.author.display_name}", icon_url=str(ctx.author.avatar))
             await ctx.send(embed=embed)
         else:
