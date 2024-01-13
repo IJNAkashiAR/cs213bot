@@ -1,6 +1,12 @@
 # TODO List/Roadmap for cs213bot
 
-- [ ] create instruction manual for operations of Discord and CS213bot so future terms can run the system independently
+- [ ] Create instruction manual for operations of Discord and CS213bot so future terms can run the system independently
+- [ ] Implement Prairielearn integration
+  - [ ] Implement notifications
+  - [ ] Implement dashboard
+- [ ] Simple options parser to choose which cogs to load at runtime, among other options
+- [ ] Refactor existing cogs
+- [ ] "Fun" extensions to the bot
 
 # PAST TODO LIST:
 
