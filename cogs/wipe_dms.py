@@ -8,7 +8,7 @@ from discord.ext.commands.bot import logging
 from cogs.sm213 import SM213
 
 class DMWiper(commands.Cog):
-    '''Wipes the DMs for the bot'''
+    '''Hidden Cog that wipes DMs periodically.'''
 
     def __init__(self, bot: commands.Bot, guild: Guild):
         self.bot = bot
@@ -45,6 +45,7 @@ class DMWiper(commands.Cog):
                 await next(i for i in self.guild.roles if i.name == channel.name).delete()
                 await channel.delete()
         logging.debug("Cleared DMs")
+
 
 async def setup(bot: commands.Bot):
     server_id = os.getenv("SERVER_ID")

@@ -1,51 +1,36 @@
-import asyncio
-from collections.abc import Awaitable
-import json
 import os
 from pathlib import Path
-import random
 import re
 import time
 import traceback
-import sys
 import logging
-
-from collections import defaultdict
-from datetime import datetime
 from os.path import isfile, join
-
 import discord
-from discord.abc import GuildChannel
 from discord.ext import commands
-from discord.ext.commands.bot import logging
-from bot_init import create_bot, setup_events, setup_loops
 from dotenv import load_dotenv
-
 from util.badargs import BadArgs
-from prairiepy import PrairieLearn, colormap
 
+# This file sets up the Discord bot and all of its extensions.
+# Any extra features should be placed in the 'cogs' directory to avoid cluttering this file.
+
+# Load the environment variables specified in .env
 load_dotenv()
 CS213BOT_KEY = os.getenv("CS213BOT_KEY")
 if CS213BOT_KEY is None:
-    print("CS213BOT_KEY: Not found")
+    logging.error("CS213BOT_KEY: Not found")
     exit(1)
 
 bot = commands.Bot(command_prefix="!", help_command=None, intents=discord.Intents.all())
 
+# Overload functions related to specific bot events.
+# See https://discordpy.readthedocs.io/en/stable/api.html#discord.Client.event
 @bot.event
 async def on_ready() -> None:
-    if len(sys.argv) >= 2:
-        chx = bot.get_channel(int(sys.argv[1]))
-        sys.stderr = sys.stdout
-        await chx.send(f"Ready: {bot.user}")
-    else:
-        print(f"Ready: {bot.user}")
-
-    discord.utils.setup_logging()
-    extensions=filter(lambda f: isfile(join("cogs", f)) and f != "__init__.py",
-                      os.listdir("cogs"))
+    discord.utils.setup_logging(level=logging.DEBUG)
 
     # Load extensions in the cogs directory
+    extensions=filter(lambda f: isfile(join("cogs", f)) and f != "__init__.py",
+                      os.listdir("cogs"))
     for extension in extensions:
         try:
             await bot.load_extension(Path(f"cogs."+extension).stem)
@@ -53,6 +38,7 @@ async def on_ready() -> None:
             logging.error(f"{extension} module could not be loaded. {e}")
             continue
         logging.info(f"{extension} module loaded")
+    logging.info(f"Ready: {bot.user}")
 
 
 @bot.event
@@ -72,61 +58,36 @@ async def on_command_error(ctx, error):
     else:
         etype = type(error)
         trace = error.__traceback__
+        # log unknown error 
+        logging.error(traceback.format_exception(etype, error, trace, 999))
 
-        try:
-            await ctx.send(("```python\n" + "".join(traceback.format_exception(etype, error, trace, 999)) + "```").replace("home/rq2/.local/lib/python3.9/site-packages/", ""))
-        except Exception:
-            print(("".join(traceback.format_exception(etype, error, trace, 999))).replace("home/rq2/.local/lib/python3.9/site-packages/", ""))
+@bot.event
+async def on_message_edit(before, after):
+    await bot.process_commands(after)
 
+# TODO: Clean up this procedure
+@bot.event
+async def on_message(message):
+    if isinstance(message.channel, discord.abc.PrivateChannel):
+        return
+        
+    if not message.author.bot:
+        # debugging
+        # with open("messages.txt", "a") as f:
+        # 	print(f"{message.guild.name}: {message.channel.name}: {message.author.name}: \"{message.content}\" @ {str(datetime.datetime.now())} \r\n", file = f)
+        # print(message.content)
 
+        # this is some weird thing happening only with android users in certain servers and idk why it happens
+        # but basically the '@' is screwed up
+        if message.channel.id == 838103749690916902 and len(message.attachments):
+            await message.add_reaction("⬆️")
+        if re.findall(r"<<@&457618814058758146>&?\d{18}>", message.content):
+            new = message.content.replace("<@&457618814058758146>", "@")
+            await message.channel.send(new)
 
-bot.pl_dict = defaultdict(list)
-bot.due_tomorrow = []
-bot.pl = PrairieLearn(os.getenv("PLTOKEN"), api_server_url = "https://ca.prairielearn.com/pl/api/v1")
+        if message.content.lower() == "cancel":
+            bot.get_cog("SM213").queue.append([message.author.id, time.time()])
+
+        await bot.process_commands(message)
 
 bot.run(CS213BOT_KEY)
-
-# @bot.event
-# async def on_ready():
-    
-#     if "data" not in os.listdir():
-#         os.mkdir("data")
-#     if "pl.json" not in os.listdir("data"):
-#         writeJSON({}, "data/pl.json")
-#     if "tomorrow.json" not in os.listdir("data"):
-#         writeJSON({}, "data/tomorrow.json")
-
-#     bot.pl_dict = defaultdict(list, readJSON("data/pl.json"))
-#     bot.due_tomorrow = readJSON("data/tomorrow.json")
-#     bot.loop.create_task(status_task())
-#     bot.loop.create_task(wipe_dms())
-#     bot.loop.create_task(crawl_prairielearn())
-
-# @bot.event
-# async def on_message_edit(before, after):
-#     await bot.process_commands(after)
-
-
-# @bot.event
-# async def on_message(message):
-#     if isinstance(message.channel, discord.abc.PrivateChannel):
-#         return
-        
-#     if not message.author.bot:
-#         # debugging
-#         # with open("messages.txt", "a") as f:
-#         # 	print(f"{message.guild.name}: {message.channel.name}: {message.author.name}: \"{message.content}\" @ {str(datetime.datetime.now())} \r\n", file = f)
-#         # print(message.content)
-
-#         # this is some weird thing happening only with android users in certain servers and idk why it happens
-#         # but basically the '@' is screwed up
-#         if message.channel.id == 838103749690916902 and len(message.attachments):
-#             await message.add_reaction("⬆️")
-#         if re.findall(r"<<@&457618814058758146>&?\d{18}>", message.content):
-#             new = message.content.replace("<@&457618814058758146>", "@")
-#             await message.channel.send(new)
-
-#         if message.content.lower() == "cancel":
-#             bot.get_cog("SM213").queue.append([message.author.id, time.time()])
-
-#         await bot.process_commands(message)

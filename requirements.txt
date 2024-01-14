@@ -1,8 +1,9 @@
 discord.py==2.3.2
 googletrans==3.0.0
 matplotlib==3.4.2
-numpy==1.19.5
+numpy==1.26.0
 python-dotenv==0.14.0
 pytz==2020.1
 requests==2.24.0
 webcolors==1.11.1
+pandas==2.1.4

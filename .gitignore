@@ -7,3 +7,4 @@ data
 /cs213bot.egg-info/
 /build/
 /venv/
+**/__pycache__/*.*

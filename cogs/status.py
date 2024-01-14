@@ -3,8 +3,8 @@ import random
 import discord
 from discord.ext import commands, tasks
 
-class Status(commands.Cog):
-    '''Changes the status of the bot.'''
+class Status(commands.Cog, command_attrs=dict(hidden=True)):
+    '''Hidden Cog that manages the status changing functionality.'''
 
     bot: commands.Bot
 
