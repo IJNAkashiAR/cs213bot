@@ -6,6 +6,7 @@
   - [ ] Implement dashboard
 - [ ] Simple options parser to choose which cogs to load at runtime, among other options
 - [ ] Refactor existing cogs
+- [ ] Write unit tests
 - [ ] "Fun" extensions to the bot
 
 # PAST TODO LIST:

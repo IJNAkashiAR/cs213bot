@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 import json
 import os
@@ -20,16 +20,47 @@ def readJSON(path):
     with open(path) as f:
         return json.load(f)
 
-def get_latest_access(access_rules: pd.DataFrame) -> bool:
-    latest=None
+
+def get_latest_active_access(access_rules: pd.DataFrame) -> Optional[pd.Series]:
+    '''Get the latest active access rule if it exists, otherwise return None.'''
+
+    # The typechecker must be satisfied.
+    latest:Any=None
+
     for index, row in access_rules.iterrows():
-        logging.info(datetime.strptime(row['start_date']+"00", "%Y-%m-%dT%H:%M:%S%z"))
-    return True
+        if row['start_date'] is None:
+            continue
+
+        start_date = datetime.strptime(row['start_date']+"00", "%Y-%m-%dT%H:%M:%S%z")
+        # now() is not timezone aware
+        current_time = datetime.now(timezone.utc)
+        if start_date > current_time:
+            continue
+
+        # Skip any 0 credit assignments as those are probably past their due date and are not active.
+        # if row['credit'] == 0:
+            # continue
+        
+        if latest is None or latest['start_datetime'] < start_date:
+            latest = row
+            # Add a start_datetime column to the row, makes it convenient to compare times
+            latest['start_datetime']=start_date
+            continue
+        
+    return latest
+
 
 def get_active_assessments(data: pd.DataFrame) -> pd.DataFrame:
-    '''Return a new DataFrame an active_assessment column. Active assessments are any assessments that have an active period with a non-zero score. If there are no active assessments, then the entry will be None.'''
-    data['active_assessments'] = data['assessment_access_rules'].map(get_latest_access)
+    '''Return a new DataFrame an active_assessment column. Active assessments are any assessments that have an active period with a non-zero credit. If there are no active assessments, then the entry will be None.'''
+
+    # Filter for graded assessments
+    graded_filter=data['assessment_set_heading'].map(lambda hdng: 'not graded' not in hdng)
+    graded = data.loc[graded_filter]
+    data['active_assessment'] = graded['assessment_access_rules'].map(get_latest_active_access)
+    data.loc[~graded_filter, 'active_assessment'] = None
+
     return data
+
 
 class Crawler(commands.Cog):
     '''Crawler for PrairieLearn data. Stores persistent data in the data directory.'''
@@ -111,7 +142,6 @@ class Crawler(commands.Cog):
                 return pd.json_normalize(data)
 
         data_frame['assessment_access_rules'] = data_frame['assessment_id'].map(get_access_rules)
-
         data_frame = get_active_assessments(data_frame)
 
         self.notify(data_frame, time)
