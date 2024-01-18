@@ -10,8 +10,7 @@ from discord.ext import commands
 from dotenv import load_dotenv
 from util.badargs import BadArgs
 
-# This file sets up the Discord bot and all of its extensions.
-# Any extra features should be placed in the 'cogs' directory to avoid cluttering this file.
+# This file sets up the Discord bot and all of its extensions (the main way of adding functionality of the bot).
 
 # Load the environment variables specified in .env
 load_dotenv()
